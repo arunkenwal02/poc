@@ -1,47 +1,44 @@
 #!/bin/bash
 
-# Detect upstream branch
-REMOTE_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null)
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+# Extract branch name from arguments
+BRANCH=""
+for arg in "$@"; do
+  if [[ "$arg" != "origin" && "$arg" != "git" && "$arg" != "push" ]]; then
+    BRANCH="$arg"
+  fi
+done
 
-if [ -z "$REMOTE_BRANCH" ]; then
-  echo "❌ No upstream branch found. Run: git push -u origin $CURRENT_BRANCH"
+if [ -z "$BRANCH" ]; then
+  echo "❌ Please provide branch name: e.g., git-push-with-log.sh origin main"
   exit 1
 fi
 
-# Get old SHA (last known on remote)
-OLD_SHA=$(git rev-parse "$REMOTE_BRANCH" 2>/dev/null)
-NEW_SHA=$(git rev-parse HEAD)
+# Get old HEAD of remote branch
+OLD_COMMIT=$(git rev-parse origin/$BRANCH 2>/dev/null)
 
-# Create a unique push ID and timestamp
+# Push normally
+git push origin $BRANCH
+
+# Get new HEAD after push
+NEW_COMMIT=$(git rev-parse HEAD)
+
+# Get commit details between old and new (if any)
+if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
+  COMMITS=$(git log $OLD_COMMIT..$NEW_COMMIT --pretty=format:'{"sha":"%H","author":"%an","message":"%s","timestamp":"%cd"},')
+  COMMITS_JSON="[${COMMITS%,}]"
+else
+  COMMITS_JSON="[]"
+fi
+
+# Create push entry
 TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%S)
 PUSH_ID="push_$(date +%Y%m%d_%H%M%S)"
 
-# Push changes
-git push "$@"
-EXIT_CODE=$?
+echo "{" >> push_log.json
+echo "  \"push_id\": \"$PUSH_ID\"," >> push_log.json
+echo "  \"branch\": \"$BRANCH\"," >> push_log.json
+echo "  \"timestamp\": \"$TIMESTAMP\"," >> push_log.json
+echo "  \"commits\": $COMMITS_JSON" >> push_log.json
+echo "}," >> push_log.json
 
-if [ $EXIT_CODE -ne 0 ]; then
-  echo "❌ Push failed. No log created."
-  exit $EXIT_CODE
-fi
-
-# Log to push_log.txt
-echo "==== $PUSH_ID | Branch: $CURRENT_BRANCH | Time: $TIMESTAMP ====" >> push_log.txt
-git log $OLD_SHA..$NEW_SHA --pretty=format:"%h | %an | %s | %cd" >> push_log.txt
-echo -e "\n" >> push_log.txt
-
-# Create JSON structure
-COMMITS_JSON=$(git log $OLD_SHA..$NEW_SHA --pretty=format:'{"sha":"%H","author":"%an","message":"%s","timestamp":"%cd"},')
-COMMITS_JSON="[${COMMITS_JSON%,}]"  # remove trailing comma
-
-cat <<EOF >> push_log.json
-{
-  "push_id": "$PUSH_ID",
-  "branch": "$CURRENT_BRANCH",
-  "timestamp": "$TIMESTAMP",
-  "commits": $COMMITS_JSON
-},
-EOF
-
-echo "✅ Push logged under $PUSH_ID in push_log.txt and push_log.json"
+echo "✅ Push and log recorded successfully."
