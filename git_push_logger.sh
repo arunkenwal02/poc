@@ -1,67 +1,53 @@
 #!/bin/bash
 
-# Extract branch name from arguments
-BRANCH=""
-for arg in "$@"; do
-  if [[ "$arg" != "origin" && "$arg" != "git" && "$arg" != "push" ]]; then
-    BRANCH="$arg"
-  fi
-done
+branch="main"  # or change to current branch dynamically if needed
 
-if [ -z "$BRANCH" ]; then
-  echo "❌ Please provide branch name: e.g., git-push-with-log.sh origin main"
-  exit 1
+echo "🔁 Pushing changes to remote..."
+git push origin "$branch"
+
+# Check if push was successful
+if [ $? -ne 0 ]; then
+    echo "❌ Git push failed."
+    exit 1
 fi
 
-# Get old HEAD of remote branch
-OLD_COMMIT=$(git rev-parse origin/$BRANCH 2>/dev/null)
+# Get latest commit SHA
+commit_sha=$(git rev-parse HEAD)
 
-# Push normally
-git push origin $BRANCH
+# Get commit details and diff
+commit_date=$(git show -s --format=%ad --date=iso "$commit_sha")
+commit_author=$(git show -s --format=%an "$commit_sha")
+commit_message=$(git show -s --format=%s "$commit_sha")
+commit_diff=$(git show "$commit_sha" --pretty=format:'')
 
-# Get new HEAD after push
-NEW_COMMIT=$(git rev-parse HEAD)
+# Escape the diff for JSON (escape double quotes, backslashes, and newlines)
+escaped_diff=$(echo "$commit_diff" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
 
-# Get commit details between old and new (if any)
-COMMITS_JSON="[]"
-if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
-  COMMITS_JSON="["
-  while read -r sha; do
-    author=$(git show -s --format='%an' "$sha")
-    message=$(git show -s --format='%s' "$sha")
-    timestamp=$(git show -s --format='%cd' "$sha")
-    diff=$(git show "$sha" --no-color | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+# Create JSON entry
+json_entry=$(cat <<EOF
+{
+  "push_id": "$commit_sha",
+  "date": "$commit_date",
+  "author": "$commit_author",
+  "message": "$commit_message",
+  "code_diff": $escaped_diff
+}
+EOF
+)
 
-    COMMITS_JSON+="
-    {
-      \"sha\": \"$sha\",
-      \"author\": \"$author\",
-      \"message\": \"$message\",
-      \"timestamp\": \"$timestamp\",
-      \"diff\": \"$diff\"
-    },"
-  done < <(git rev-list $OLD_COMMIT..$NEW_COMMIT)
-  COMMITS_JSON="${COMMITS_JSON%,}
-  ]"
-fi
+log_file="git_push_log.json"
 
-# Create push entry
-TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%S)
-PUSH_ID="push_$(date +%Y%m%d_%H%M%S)"
-
-LOG_ENTRY="{
-  \"push_id\": \"$PUSH_ID\",
-  \"branch\": \"$BRANCH\",
-  \"timestamp\": \"$TIMESTAMP\",
-  \"commits\": $COMMITS_JSON
-},"
-
-# Append to push_log.json (ensure it's a valid JSON array)
-if [ ! -f push_log.json ]; then
-  echo "[$LOG_ENTRY]" > push_log.json
+# If file doesn't exist, initialize with opening bracket
+if [ ! -f "$log_file" ]; then
+    echo "[" > "$log_file"
 else
-  TMP_FILE=$(mktemp)
-  jq ". += [$LOG_ENTRY]" push_log.json > "$TMP_FILE" && mv "$TMP_FILE" push_log.json
+    # Remove closing bracket to append new entry
+    sed -i '' '$ d' "$log_file"
+    echo "," >> "$log_file"
 fi
 
-echo "✅ Push and log (with diffs) recorded successfully."
+# Add the entry and close the array
+echo "  $json_entry" >> "$log_file"
+echo "]" >> "$log_file"
+
+echo "✅ Commit logged to $log_file"
