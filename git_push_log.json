@@ -1,25 +1,42 @@
 [
   {
-  "push_id": "88d91c6c8fd571b1921d0ad8776f4f5febd63dd7",
-  "date": "2025-08-05 00:06:24 +0530",
-  "author": "Arun Kenwal",
-  "message": "code",
-  "code_diff": "diff --git a/main.py b/main.py\nindex be36e4e..c029327 100644\n--- a/main.py\n+++ b/main.py\n@@ -29,4 +29,3 @@ def get_latest_push_events(repo_url: str = Query(...)):\n     events = response.json()\n     return events[:2]\n \n-######hellllllll\n\\ No newline at end of file\n"
-}
-,
+    "push_id": "88d91c6c8fd571b1921d0ad8776f4f5febd63dd7",
+    "date": "2025-08-05 00:06:24 +0530",
+    "author": "Arun Kenwal",
+    "message": "code",
+    "code_diff": "diff --git a/main.py b/main.py\nindex be36e4e..c029327 100644\n--- a/main.py\n+++ b/main.py\n@@ -29,4 +29,3 @@ def get_latest_push_events(repo_url: str = Query(...)):\n     events = response.json()\n     return events[:2]\n \n-######hellllllll\n\\ No newline at end of file\n"
+  },
   {
-  "push_id": "1a3a42640851fda9addae204163526f10ea6d368",
-  "date": "2025-08-05 00:13:29 +0530",
-  "author": "Arun Kenwal",
-  "message": "Your commit message",
-  "code_diff": "diff --git a/git_push_log.json b/git_push_log.json\nnew file mode 100644\nindex 0000000..76fa414\n--- /dev/null\n+++ b/git_push_log.json\n@@ -0,0 +1,9 @@\n+[\n+  {\n+  \"push_id\": \"88d91c6c8fd571b1921d0ad8776f4f5febd63dd7\",\n+  \"date\": \"2025-08-05 00:06:24 +0530\",\n+  \"author\": \"Arun Kenwal\",\n+  \"message\": \"code\",\n+  \"code_diff\": \"diff --git a/main.py b/main.py\\nindex be36e4e..c029327 100644\\n--- a/main.py\\n+++ b/main.py\\n@@ -29,4 +29,3 @@ def get_latest_push_events(repo_url: str = Query(...)):\\n     events = response.json()\\n     return events[:2]\\n \\n-######hellllllll\\n\\\\ No newline at end of file\\n\"\n+}\n+]\ndiff --git a/git_push_logger.sh b/git_push_logger.sh\nindex 43ea390..d186751 100755\n--- a/git_push_logger.sh\n+++ b/git_push_logger.sh\n@@ -1,67 +1,53 @@\n #!/bin/bash\n \n-# Extract branch name from arguments\n-BRANCH=\"\"\n-for arg in \"$@\"; do\n-  if [[ \"$arg\" != \"origin\" && \"$arg\" != \"git\" && \"$arg\" != \"push\" ]]; then\n-    BRANCH=\"$arg\"\n-  fi\n-done\n+branch=\"main\"  # or change to current branch dynamically if needed\n \n-if [ -z \"$BRANCH\" ]; then\n-  echo \"\u274c Please provide branch name: e.g., git-push-with-log.sh origin main\"\n-  exit 1\n-fi\n-\n-# Get old HEAD of remote branch\n-OLD_COMMIT=$(git rev-parse origin/$BRANCH 2>/dev/null)\n-\n-# Push normally\n-git push origin $BRANCH\n-\n-# Get new HEAD after push\n-NEW_COMMIT=$(git rev-parse HEAD)\n+echo \"\ud83d\udd01 Pushing changes to remote...\"\n+git push origin \"$branch\"\n \n-# Get commit details between old and new (if any)\n-COMMITS_JSON=\"[]\"\n-if [ \"$OLD_COMMIT\" != \"$NEW_COMMIT\" ]; then\n-  COMMITS_JSON=\"[\"\n-  while read -r sha; do\n-    author=$(git show -s --format='%an' \"$sha\")\n-    message=$(git show -s --format='%s' \"$sha\")\n-    timestamp=$(git show -s --format='%cd' \"$sha\")\n-    diff=$(git show \"$sha\" --no-color | sed 's/\"/\\\\\"/g' | sed ':a;N;$!ba;s/\\n/\\\\n/g')\n-\n-    COMMITS_JSON+=\"\n-    {\n-      \\\"sha\\\": \\\"$sha\\\",\n-      \\\"author\\\": \\\"$author\\\",\n-      \\\"message\\\": \\\"$message\\\",\n-      \\\"timestamp\\\": \\\"$timestamp\\\",\n-      \\\"diff\\\": \\\"$diff\\\"\n-    },\"\n-  done < <(git rev-list $OLD_COMMIT..$NEW_COMMIT)\n-  COMMITS_JSON=\"${COMMITS_JSON%,}\n-  ]\"\n+# Check if push was successful\n+if [ $? -ne 0 ]; then\n+    echo \"\u274c Git push failed.\"\n+    exit 1\n fi\n \n-# Create push entry\n-TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%S)\n-PUSH_ID=\"push_$(date +%Y%m%d_%H%M%S)\"\n-\n-LOG_ENTRY=\"{\n-  \\\"push_id\\\": \\\"$PUSH_ID\\\",\n-  \\\"branch\\\": \\\"$BRANCH\\\",\n-  \\\"timestamp\\\": \\\"$TIMESTAMP\\\",\n-  \\\"commits\\\": $COMMITS_JSON\n-},\"\n-\n-# Append to push_log.json (ensure it's a valid JSON array)\n-if [ ! -f push_log.json ]; then\n-  echo \"[$LOG_ENTRY]\" > push_log.json\n+# Get latest commit SHA\n+commit_sha=$(git rev-parse HEAD)\n+\n+# Get commit details and diff\n+commit_date=$(git show -s --format=%ad --date=iso \"$commit_sha\")\n+commit_author=$(git show -s --format=%an \"$commit_sha\")\n+commit_message=$(git show -s --format=%s \"$commit_sha\")\n+commit_diff=$(git show \"$commit_sha\" --pretty=format:'')\n+\n+# Escape the diff for JSON (escape double quotes, backslashes, and newlines)\n+escaped_diff=$(echo \"$commit_diff\" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')\n+\n+# Create JSON entry\n+json_entry=$(cat <<EOF\n+{\n+  \"push_id\": \"$commit_sha\",\n+  \"date\": \"$commit_date\",\n+  \"author\": \"$commit_author\",\n+  \"message\": \"$commit_message\",\n+  \"code_diff\": $escaped_diff\n+}\n+EOF\n+)\n+\n+log_file=\"git_push_log.json\"\n+\n+# If file doesn't exist, initialize with opening bracket\n+if [ ! -f \"$log_file\" ]; then\n+    echo \"[\" > \"$log_file\"\n else\n-  TMP_FILE=$(mktemp)\n-  jq \". += [$LOG_ENTRY]\" push_log.json > \"$TMP_FILE\" && mv \"$TMP_FILE\" push_log.json\n+    # Remove closing bracket to append new entry\n+    sed -i '' '$ d' \"$log_file\"\n+    echo \",\" >> \"$log_file\"\n fi\n \n-echo \"\u2705 Push and log (with diffs) recorded successfully.\"\n+# Add the entry and close the array\n+echo \"  $json_entry\" >> \"$log_file\"\n+echo \"]\" >> \"$log_file\"\n+\n+echo \"\u2705 Commit logged to $log_file\"\n"
-}
-,
+    "push_id": "1a3a42640851fda9addae204163526f10ea6d368",
+    "date": "2025-08-05 00:13:29 +0530",
+    "author": "Arun Kenwal",
+    "message": "Your commit message",
+    "code_diff": "diff --git a/git_push_log.json b/git_push_log.json\nnew file mode 100644\nindex 0000000..76fa414\n--- /dev/null\n+++ b/git_push_log.json\n@@ -0,0 +1,9 @@\n+[\n+  {\n+  \"push_id\": \"88d91c6c8fd571b1921d0ad8776f4f5febd63dd7\",\n+  \"date\": \"2025-08-05 00:06:24 +0530\",\n+  \"author\": \"Arun Kenwal\",\n+  \"message\": \"code\",\n+  \"code_diff\": \"diff --git a/main.py b/main.py\\nindex be36e4e..c029327 100644\\n--- a/main.py\\n+++ b/main.py\\n@@ -29,4 +29,3 @@ def get_latest_push_events(repo_url: str = Query(...)):\\n     events = response.json()\\n     return events[:2]\\n \\n-######hellllllll\\n\\\\ No newline at end of file\\n\"\n+}\n+]\ndiff --git a/git_push_logger.sh b/git_push_logger.sh\nindex 43ea390..d186751 100755\n--- a/git_push_logger.sh\n+++ b/git_push_logger.sh\n@@ -1,67 +1,53 @@\n #!/bin/bash\n \n-# Extract branch name from arguments\n-BRANCH=\"\"\n-for arg in \"$@\"; do\n-  if [[ \"$arg\" != \"origin\" && \"$arg\" != \"git\" && \"$arg\" != \"push\" ]]; then\n-    BRANCH=\"$arg\"\n-  fi\n-done\n+branch=\"main\"  # or change to current branch dynamically if needed\n \n-if [ -z \"$BRANCH\" ]; then\n-  echo \"❌ Please provide branch name: e.g., git-push-with-log.sh origin main\"\n-  exit 1\n-fi\n-\n-# Get old HEAD of remote branch\n-OLD_COMMIT=$(git rev-parse origin/$BRANCH 2>/dev/null)\n-\n-# Push normally\n-git push origin $BRANCH\n-\n-# Get new HEAD after push\n-NEW_COMMIT=$(git rev-parse HEAD)\n+echo \"🔁 Pushing changes to remote...\"\n+git push origin \"$branch\"\n \n-# Get commit details between old and new (if any)\n-COMMITS_JSON=\"[]\"\n-if [ \"$OLD_COMMIT\" != \"$NEW_COMMIT\" ]; then\n-  COMMITS_JSON=\"[\"\n-  while read -r sha; do\n-    author=$(git show -s --format='%an' \"$sha\")\n-    message=$(git show -s --format='%s' \"$sha\")\n-    timestamp=$(git show -s --format='%cd' \"$sha\")\n-    diff=$(git show \"$sha\" --no-color | sed 's/\"/\\\\\"/g' | sed ':a;N;$!ba;s/\\n/\\\\n/g')\n-\n-    COMMITS_JSON+=\"\n-    {\n-      \\\"sha\\\": \\\"$sha\\\",\n-      \\\"author\\\": \\\"$author\\\",\n-      \\\"message\\\": \\\"$message\\\",\n-      \\\"timestamp\\\": \\\"$timestamp\\\",\n-      \\\"diff\\\": \\\"$diff\\\"\n-    },\"\n-  done < <(git rev-list $OLD_COMMIT..$NEW_COMMIT)\n-  COMMITS_JSON=\"${COMMITS_JSON%,}\n-  ]\"\n+# Check if push was successful\n+if [ $? -ne 0 ]; then\n+    echo \"❌ Git push failed.\"\n+    exit 1\n fi\n \n-# Create push entry\n-TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%S)\n-PUSH_ID=\"push_$(date +%Y%m%d_%H%M%S)\"\n-\n-LOG_ENTRY=\"{\n-  \\\"push_id\\\": \\\"$PUSH_ID\\\",\n-  \\\"branch\\\": \\\"$BRANCH\\\",\n-  \\\"timestamp\\\": \\\"$TIMESTAMP\\\",\n-  \\\"commits\\\": $COMMITS_JSON\n-},\"\n-\n-# Append to push_log.json (ensure it's a valid JSON array)\n-if [ ! -f push_log.json ]; then\n-  echo \"[$LOG_ENTRY]\" > push_log.json\n+# Get latest commit SHA\n+commit_sha=$(git rev-parse HEAD)\n+\n+# Get commit details and diff\n+commit_date=$(git show -s --format=%ad --date=iso \"$commit_sha\")\n+commit_author=$(git show -s --format=%an \"$commit_sha\")\n+commit_message=$(git show -s --format=%s \"$commit_sha\")\n+commit_diff=$(git show \"$commit_sha\" --pretty=format:'')\n+\n+# Escape the diff for JSON (escape double quotes, backslashes, and newlines)\n+escaped_diff=$(echo \"$commit_diff\" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')\n+\n+# Create JSON entry\n+json_entry=$(cat <<EOF\n+{\n+  \"push_id\": \"$commit_sha\",\n+  \"date\": \"$commit_date\",\n+  \"author\": \"$commit_author\",\n+  \"message\": \"$commit_message\",\n+  \"code_diff\": $escaped_diff\n+}\n+EOF\n+)\n+\n+log_file=\"git_push_log.json\"\n+\n+# If file doesn't exist, initialize with opening bracket\n+if [ ! -f \"$log_file\" ]; then\n+    echo \"[\" > \"$log_file\"\n else\n-  TMP_FILE=$(mktemp)\n-  jq \". += [$LOG_ENTRY]\" push_log.json > \"$TMP_FILE\" && mv \"$TMP_FILE\" push_log.json\n+    # Remove closing bracket to append new entry\n+    sed -i '' '$ d' \"$log_file\"\n+    echo \",\" >> \"$log_file\"\n fi\n \n-echo \"✅ Push and log (with diffs) recorded successfully.\"\n+# Add the entry and close the array\n+echo \"  $json_entry\" >> \"$log_file\"\n+echo \"]\" >> \"$log_file\"\n+\n+echo \"✅ Commit logged to $log_file\"\n"
+  },
   {
-  "push_id": "5c1309fb54ff9cc0252fd7f3b1061daa4ac0a975",
-  "date": "2025-08-05 00:16:44 +0530",
-  "author": "Arun Kenwal",
-  "message": "myyyy",
-  "code_diff": "diff --git a/main.py b/main.py\nindex 0cedc0a..ed73907 100644\n--- a/main.py\n+++ b/main.py\n@@ -29,4 +29,7 @@ def get_latest_push_events(repo_url: str = Query(...)):\n     events = response.json()\n     return events[:2]\n \n-#### heelll\n\\ No newline at end of file\n+#### heelll\n+\n+\n+##### hellllllloooo\n\\ No newline at end of file\n"
-}
+    "push_id": "5c1309fb54ff9cc0252fd7f3b1061daa4ac0a975",
+    "date": "2025-08-05 00:16:44 +0530",
+    "author": "Arun Kenwal",
+    "message": "myyyy",
+    "code_diff": "diff --git a/main.py b/main.py\nindex 0cedc0a..ed73907 100644\n--- a/main.py\n+++ b/main.py\n@@ -29,4 +29,7 @@ def get_latest_push_events(repo_url: str = Query(...)):\n     events = response.json()\n     return events[:2]\n \n-#### heelll\n\\ No newline at end of file\n+#### heelll\n+\n+\n+##### hellllllloooo\n\\ No newline at end of file\n"
+  },
+  {
+    "push_id": "push_20250805_002802",
+    "branch": "main",
+    "timestamp": "2025-08-05T00:28:02",
+    "commits": [
+      {
+        "sha": "3c00bcf0e34b0476b894addffd6f3cd3f984d357",
+        "author": "Arun Kenwal",
+        "message": "hash",
+        "timestamp": "Tue Aug 5 00:27:33 2025 +0530"
+      },
+      {
+        "sha": "51330bd5e6e23dd87d28625ad2f18ae884de8b7b",
+        "author": "Arun Kenwal",
+        "message": "hash removed",
+        "timestamp": "Tue Aug 5 00:27:17 2025 +0530"
+      }
+    ]
+  }
 ]
